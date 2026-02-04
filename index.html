@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a73e8">
+
+<style>
+*{box-sizing:border-box;text-transform:uppercase;}
+body{font-family:Arial;background:#f2f2f2;margin:0;padding:0}
+.box{max-width:720px;margin:auto;background:#fff;padding:15px}
+button{padding:12px;width:100%;margin-top:10px;border:none;font-weight:bold;border-radius:8px}
+.blue{background:#1a73e8;color:#fff}
+.green{background:#188038;color:#fff}
+.red{background:#d93025;color:#fff}
+.gray{background:#5f6368;color:#fff}
+.hidden{display:none}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+td,th{border:1px solid #ccc;padding:6px;text-align:center}
+input,select{width:100%;padding:10px;margin-top:8px;border-radius:8px;border:1px solid #ccc}
+.row2{display:flex;gap:10px;margin-top:10px}
+.row2 button{width:50%}
+</style>
+</head>
+
+<body>
+<div class="box">
+
+<h3>LOGIN</h3>
+<select id="user"></select>
+<input id="pin" type="password" placeholder="PIN">
+<button class="blue" onclick="login()">LOGIN</button>
+
+<div id="menu" class="hidden">
+<button onclick="show('cust')">ADD CUSTOMER</button>
+<button onclick="show('sale')">SALES ORDER</button>
+</div>
+
+<!-- ADD CUSTOMER -->
+<div id="cust" class="hidden">
+<h3>ADD CUSTOMER</h3>
+
+<input id="cname" placeholder="CUSTOMER NAME" oninput="this.value=this.value.toUpperCase()">
+<input id="owner" placeholder="OWNER NAME" oninput="this.value=this.value.toUpperCase()">
+<input id="contact" placeholder="CONTACT" oninput="this.value=this.value.toUpperCase()">
+
+<select id="loc"></select>
+
+<select id="sub"></select>
+<input id="submanual" placeholder="OR TYPE NEW SUB LOCALITY" oninput="this.value=this.value.toUpperCase()">
+
+<button class="red" onclick="saveCustomer()">SAVE CUSTOMER</button>
+</div>
+
+<!-- SALES ORDER -->
+<div id="sale" class="hidden">
+<h3>SALES ORDER</h3>
+
+<div class="row2">
+  <button class="gray" onclick="refreshCustomers()">REFRESH CUSTOMERS</button>
+  <button class="gray" onclick="refreshProducts()">REFRESH PRODUCTS</button>
+</div>
+
+<select id="sloc"></select>
+<select id="ssub"></select>
+<select id="scust"></select>
+
+<input id="recovery" placeholder="RECOVERY" oninput="this.value=this.value.toUpperCase()">
+
+<select id="orderType" onchange="toggleOrderType()">
+  <option value="">SELECT ORDER TYPE</option>
+  <option value="PRODUCTIVE">PRODUCTIVE</option>
+  <option value="NON PRODUCTIVE">NON PRODUCTIVE</option>
+</select>
+
+<div id="nonProdBox" class="hidden">
+  <input id="nonProdReason" placeholder="NON PRODUCTIVE REASON / DETAIL" oninput="this.value=this.value.toUpperCase()">
+</div>
+
+<div id="summaryBox" class="hidden">
+  <b>TOTAL KG:</b> <span id="tkg">0</span> |
+  <b>TOTAL VALUE:</b> <span id="tval">0</span>
+</div>
+
+<table id="sku" class="hidden">
+<thead>
+<tr><th>SKU</th><th>QTY</th><th>KG</th><th>VALUE</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<button class="green" onclick="saveSale()">SAVE ORDER</button>
+</div>
+</div>
+
+<script>
+const $=i=>document.getElementById(i);
+let USER={}, PRODUCTS=[], CUSTOMERS=[], LAT=0, LNG=0;
+
+function toU(v){ return String(v||"").toUpperCase().trim(); }
+
+/* LOAD USERS */
+google.script.run.withSuccessHandler(u=>{
+  user.innerHTML='<option value="">SELECT USER</option>';
+  u.forEach(x=>user.innerHTML+=`<option data-pin="${x.pin}" data-area="${x.area}">${toU(x.name)}</option>`);
+}).getUsers();
+
+/* LOGIN */
+function login(){
+  const o=user.selectedOptions[0];
+  if(!o || !o.dataset.pin){ alert("SELECT USER"); return; }
+  if(pin.value.trim()!==o.dataset.pin){ alert("WRONG PIN"); return; }
+
+  USER={name:toU(o.textContent), area:toU(o.dataset.area)};
+  menu.classList.remove("hidden");
+
+  refreshLocalities();
+  refreshProducts();
+  refreshCustomers();
+
+  navigator.geolocation.getCurrentPosition(p=>{
+    LAT=p.coords.latitude; LNG=p.coords.longitude;
+  },()=>{}, {enableHighAccuracy:true, timeout:15000});
+}
+
+/* SHOW SCREEN */
+function show(id){
+  cust.classList.add("hidden");
+  sale.classList.add("hidden");
+  $(id).classList.remove("hidden");
+}
+
+/* REFRESH LOCALITIES */
+function refreshLocalities(){
+  google.script.run.withSuccessHandler(l=>{
+    loc.innerHTML=sloc.innerHTML='<option value="">SELECT LOCALITY</option>';
+    l.forEach(x=>{
+      const v=toU(x);
+      loc.innerHTML+=`<option>${v}</option>`;
+      sloc.innerHTML+=`<option>${v}</option>`;
+    });
+  }).getLocalities(USER.area);
+}
+
+/* ✅ SUBLOCALITY FROM CUSTOMERS SHEET */
+loc.onchange=()=>{
+  sub.innerHTML='<option value="">SELECT SUB LOCALITY</option>';
+  submanual.value="";
+  if(!loc.value) return;
+
+  google.script.run.withSuccessHandler(list=>{
+    sub.innerHTML='<option value="">SELECT SUB LOCALITY</option>';
+    list.forEach(s=>sub.innerHTML+=`<option>${toU(s)}</option>`);
+  }).getCustomerSubLocalities(USER.name, loc.value);
+};
+
+/* REFRESH PRODUCTS */
+function refreshProducts(){
+  google.script.run.withSuccessHandler(p=>{
+    PRODUCTS=p;
+    const tb=$("sku").querySelector("tbody");
+    tb.innerHTML="";
+    p.forEach(x=>{
+      tb.innerHTML+=`
+      <tr>
+        <td>${toU(x.sku)}</td>
+        <td><input class="qty" type="number" min="0" inputmode="numeric" placeholder="0" value="" onfocus="this.select()"></td>
+        <td class="kg">0</td>
+        <td class="val">0</td>
+      </tr>`;
+    });
+  }).getProducts();
+}
+
+/* REFRESH CUSTOMERS */
+function refreshCustomers(){
+  google.script.run.withSuccessHandler(c=>{
+    CUSTOMERS=c.map(x=>({
+      locality:toU(x.locality),
+      sub:toU(x.sub),
+      name:toU(x.name)
+    }));
+  }).getCustomers(USER.name);
+}
+
+/* RESET CUSTOMER FORM */
+function resetCustomerForm(){
+  cname.value="";
+  owner.value="";
+  contact.value="";
+  sub.value="";
+  submanual.value="";
+}
+
+/* ✅ RESET SALES FORM */
+function resetSalesForm(){
+  scust.value="";
+  recovery.value="";
+  orderType.value="";
+  nonProdReason.value="";
+
+  nonProdBox.classList.add("hidden");
+  sku.classList.add("hidden");
+  summaryBox.classList.add("hidden");
+
+  tkg.innerText="0";
+  tval.innerText="0";
+
+  document.querySelectorAll("#sku tbody tr").forEach(r=>{
+    r.querySelector(".qty").value="";
+    r.querySelector(".kg").innerText="0";
+    r.querySelector(".val").innerText="0";
+  });
+}
+
+/* SAVE CUSTOMER */
+function saveCustomer(){
+  const subVal = toU(submanual.value || sub.value);
+
+  if(!cname.value || !owner.value || !contact.value || !loc.value){
+    alert("FILL ALL REQUIRED FIELDS"); return;
+  }
+  if(!subVal){
+    alert("SUB LOCALITY REQUIRED"); return;
+  }
+
+  const data={
+    user:USER.name,
+    area:USER.area,
+    locality:toU(loc.value),
+    sub:subVal,
+    customer:toU(cname.value),
+    owner:toU(owner.value),
+    contact:toU(contact.value),
+    lat:LAT,
+    lng:LNG
+  };
+
+  if(navigator.onLine){
+    google.script.run
+      .withSuccessHandler(()=>{
+        alert("SAVED ONLINE ✅");
+        resetCustomerForm();
+
+        refreshCustomers();
+
+        google.script.run.withSuccessHandler(list=>{
+          sub.innerHTML='<option value="">SELECT SUB LOCALITY</option>';
+          list.forEach(s=>sub.innerHTML+=`<option>${toU(s)}</option>`);
+        }).getCustomerSubLocalities(USER.name, loc.value);
+      })
+      .withFailureHandler(err=>alert("ERROR: " + (err.message||err)))
+      .saveCustomer(data);
+  }else{
+    let a=JSON.parse(localStorage.getItem("cust")||"[]");
+    a.push(data);
+    localStorage.setItem("cust",JSON.stringify(a));
+    alert("SAVED OFFLINE ✅");
+    resetCustomerForm();
+  }
+}
+
+/* SALES DROPDOWNS */
+sloc.onchange=()=>{
+  ssub.innerHTML='<option value="">SELECT SUB LOCALITY</option>';
+  scust.innerHTML='<option value="">SELECT CUSTOMER</option>';
+
+  [...new Set(CUSTOMERS.filter(x=>x.locality===sloc.value).map(x=>x.sub))]
+    .forEach(x=>ssub.innerHTML+=`<option>${x}</option>`);
+};
+
+ssub.onchange=()=>{
+  scust.innerHTML='<option value="">SELECT CUSTOMER</option>';
+  CUSTOMERS.filter(x=>x.sub===ssub.value)
+    .forEach(x=>scust.innerHTML+=`<option>${x.name}</option>`);
+};
+
+/* ORDER TYPE TOGGLE */
+function toggleOrderType(){
+  nonProdBox.classList.add("hidden");
+  sku.classList.add("hidden");
+  summaryBox.classList.add("hidden");
+
+  if(orderType.value==="PRODUCTIVE"){
+    sku.classList.remove("hidden");
+    summaryBox.classList.remove("hidden");
+  }
+  if(orderType.value==="NON PRODUCTIVE"){
+    nonProdBox.classList.remove("hidden");
+  }
+}
+
+/* TOTALS */
+document.addEventListener("input",()=>{
+  if(orderType.value!=="PRODUCTIVE") return;
+
+  let kg=0,val=0;
+  document.querySelectorAll("#sku tbody tr").forEach((r,i)=>{
+    const q=Number(r.querySelector(".qty").value || 0);
+    const w=q*PRODUCTS[i].weight;
+    const v=q*PRODUCTS[i].price;
+
+    r.querySelector(".kg").innerText=w.toFixed(2);
+    r.querySelector(".val").innerText=v.toFixed(0);
+
+    kg+=w; val+=v;
+  });
+
+  tkg.innerText=kg.toFixed(2);
+  tval.innerText=val.toFixed(0);
+});
+
+/* SAVE SALE */
+function saveSale(){
+  if(!sloc.value || !ssub.value || !scust.value){
+    alert("SELECT LOCALITY / SUB LOCALITY / CUSTOMER"); return;
+  }
+  if(!orderType.value){
+    alert("SELECT ORDER TYPE"); return;
+  }
+
+  // NON PRODUCTIVE
+  if(orderType.value==="NON PRODUCTIVE"){
+    if(!nonProdReason.value.trim()){
+      alert("ENTER NON PRODUCTIVE DETAIL"); return;
+    }
+
+    const data={
+      user:USER.name,
+      area:USER.area,
+      locality:toU(sloc.value),
+      sub:toU(ssub.value),
+      customer:toU(scust.value),
+      recovery:toU(recovery.value),
+      orderType:"NON PRODUCTIVE",
+      nonProdReason:toU(nonProdReason.value),
+      items:[],
+      lat:LAT,
+      lng:LNG
+    };
+
+    if(navigator.onLine){
+      google.script.run.withSuccessHandler(()=>{
+          alert("SAVED ONLINE ✅");
+          resetSalesForm();
+        })
+        .withFailureHandler(err=>alert("ERROR: "+(err.message||err)))
+        .saveSales(data);
+    }else{
+      let a=JSON.parse(localStorage.getItem("sales")||"[]");
+      a.push(data);
+      localStorage.setItem("sales",JSON.stringify(a));
+      alert("SAVED OFFLINE ✅");
+      resetSalesForm();
+    }
+    return;
+  }
+
+  // PRODUCTIVE
+  let items=[];
+  document.querySelectorAll("#sku tbody tr").forEach((r,i)=>{
+    const q=Number(r.querySelector(".qty").value || 0);
+    if(q>0){
+      items.push({
+        sku:toU(PRODUCTS[i].sku),
+        qty:q,
+        kg:q*PRODUCTS[i].weight,
+        value:q*PRODUCTS[i].price
+      });
+    }
+  });
+
+  if(items.length===0){
+    alert("QTY REQUIRED"); return;
+  }
+
+  const data={
+    user:USER.name,
+    area:USER.area,
+    locality:toU(sloc.value),
+    sub:toU(ssub.value),
+    customer:toU(scust.value),
+    recovery:toU(recovery.value),
+    orderType:"PRODUCTIVE",
+    nonProdReason:"",
+    items,
+    lat:LAT,
+    lng:LNG
+  };
+
+  if(navigator.onLine){
+    google.script.run.withSuccessHandler(()=>{
+        alert("SAVED ONLINE ✅");
+        resetSalesForm();
+      })
+      .withFailureHandler(err=>alert("ERROR: "+(err.message||err)))
+      .saveSales(data);
+  }else{
+    let a=JSON.parse(localStorage.getItem("sales")||"[]");
+    a.push(data);
+    localStorage.setItem("sales",JSON.stringify(a));
+    alert("SAVED OFFLINE ✅");
+    resetSalesForm();
+  }
+}
+
+/* AUTO SYNC */
+window.addEventListener("online",()=>{
+  ["cust","sales"].forEach(k=>{
+    let a=JSON.parse(localStorage.getItem(k)||"[]");
+    a.forEach(d=>{
+      k==="cust"
+        ? google.script.run.saveCustomer(d)
+        : google.script.run.saveSales(d);
+    });
+    localStorage.removeItem(k);
+  });
+});
+
+/* PWA */
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js");
+}
+</script>
+</body>
+</html>
