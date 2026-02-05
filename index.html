@@ -1,3 +1,18 @@
+const API="https://script.google.com/macros/s/AKfycbzGLPzSlya9JWf8LJFuXVrTTw5TrIJbfkOa_1DsrnjXlQOWCotu2FST85CZx9IUxy0PjQ/exec";
+
+async function GET(action,p={}){
+ let u=new URL(API);
+ u.searchParams.set("action",action);
+ Object.keys(p).forEach(k=>u.searchParams.set(k,p[k]));
+ return fetch(u).then(r=>r.json());
+}
+
+async function POST(action,data){
+ return fetch(API,{
+  method:"POST",
+  body:JSON.stringify({action,data})
+ }).then(r=>r.json());
+}
 <!DOCTYPE html>
 <html>
 <head>
