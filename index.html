@@ -6,27 +6,29 @@
 <meta name="theme-color" content="#1a73e8">
 
 <style>
-*{box-sizing:border-box;text-transform:uppercase}
+*{box-sizing:border-box;text-transform:uppercase;}
 body{font-family:Arial;background:#f2f2f2;margin:0}
-.box{max-width:760px;margin:auto;background:#fff;padding:15px}
-button{padding:12px;width:100%;margin-top:10px;border:none;border-radius:8px;font-weight:bold}
+.box{max-width:720px;margin:auto;background:#fff;padding:15px}
+button{padding:12px;width:100%;margin-top:8px;border:none;border-radius:8px;font-weight:bold}
 .blue{background:#1a73e8;color:#fff}
 .green{background:#188038;color:#fff}
 .red{background:#d93025;color:#fff}
-.gray{background:#5f6368;color:#fff}
 .hidden{display:none}
-input,select{width:100%;padding:10px;margin-top:8px}
+input,select{width:100%;padding:10px;margin-top:8px;border-radius:8px;border:1px solid #ccc}
 table{width:100%;border-collapse:collapse;margin-top:10px}
 td,th{border:1px solid #ccc;padding:6px;text-align:center}
 </style>
 </head>
 
 <body>
+
 <div class="box">
 
 <h3>LOGIN</h3>
+
 <select id="user"></select>
-<input id="pin" type="password">
+<input id="pin" type="password" placeholder="PIN">
+
 <button class="blue" onclick="login()">LOGIN</button>
 
 <div id="menu" class="hidden">
@@ -34,18 +36,21 @@ td,th{border:1px solid #ccc;padding:6px;text-align:center}
 <button onclick="show('sale')">SALES ORDER</button>
 </div>
 
-<!-- ADD CUSTOMER -->
 <div id="cust" class="hidden">
 <h3>ADD CUSTOMER</h3>
+
 <input id="cname" placeholder="CUSTOMER NAME">
 <input id="owner" placeholder="OWNER NAME">
 <input id="contact" placeholder="CONTACT">
+
 <select id="loc"></select>
-<input id="sub" placeholder="SUB LOCALITY">
+
+<select id="sub"></select>
+<input id="submanual" placeholder="TYPE SUB LOCALITY">
+
 <button class="red" onclick="saveCustomer()">SAVE CUSTOMER</button>
 </div>
 
-<!-- SALES -->
 <div id="sale" class="hidden">
 <h3>SALES ORDER</h3>
 
@@ -55,178 +60,146 @@ td,th{border:1px solid #ccc;padding:6px;text-align:center}
 
 <input id="recovery" placeholder="RECOVERY">
 
-<select id="orderType" onchange="toggleType()">
-<option value="">ORDER TYPE</option>
-<option>PRODUCTIVE</option>
-<option>NON PRODUCTIVE</option>
-</select>
-
-<input id="reason" class="hidden" placeholder="NON PRODUCTIVE DETAIL">
-
-<div id="summary" class="hidden">
-<b>TOTAL KG:</b><span id="tkg">0</span>
-<b> TOTAL VALUE:</b><span id="tval">0</span>
-</div>
-
-<table id="sku" class="hidden">
-<thead><tr><th>SKU</th><th>QTY</th><th>KG</th><th>VALUE</th></tr></thead>
+<table id="sku">
+<thead>
+<tr><th>SKU</th><th>QTY</th><th>KG</th><th>VALUE</th></tr>
+</thead>
 <tbody></tbody>
 </table>
 
-<button class="green" onclick="saveOrder()">SAVE ORDER</button>
-</div>
+<button class="green" onclick="saveSale()">SAVE ORDER</button>
 
+</div>
 </div>
 
 <script>
+
 const API="https://script.google.com/macros/s/AKfycbzGLPzSlya9JWf8LJFuXVrTTw5TrIJbfkOa_1DsrnjXlQOWCotu2FST85CZx9IUxy0PjQ/exec";
 
-let USERS=[],USER={},PRODUCTS=[],CUSTOMERS=[],LAT=0,LNG=0;
+const $=i=>document.getElementById(i);
 
-const GET=(a,p="")=>fetch(API+"?action="+a+p).then(r=>r.json());
-const POST=(a,d)=>fetch(API,{method:"POST",body:JSON.stringify({action:a,data:d})});
+let USER={},PRODUCTS=[],CUSTOMERS=[],LAT=0,LNG=0;
 
-GET("getUsers").then(u=>{
- USERS=u;
- user.innerHTML="<option></option>";
- u.forEach(x=>user.innerHTML+=`<option>${x.name}</option>`);
+fetch(API+"?action=getusers")
+.then(r=>r.json())
+.then(d=>{
+user.innerHTML="";
+d.forEach(x=>user.innerHTML+=`<option data-pin="${x.pin}" data-area="${x.area}">${x.name}</option>`)
 });
 
 function login(){
- let f=USERS.find(x=>x.name===user.value && x.pin===pin.value);
- if(!f){alert("WRONG PIN");return;}
- USER=f;
- menu.classList.remove("hidden");
+const o=user.selectedOptions[0];
+if(pin.value!==o.dataset.pin){alert("WRONG PIN");return;}
+USER={name:o.textContent,area:o.dataset.area};
+menu.classList.remove("hidden");
 
- navigator.geolocation.getCurrentPosition(p=>{
- LAT=p.coords.latitude;
- LNG=p.coords.longitude;
- });
+loadLocalities();
+loadProducts();
+loadCustomers();
 
- loadLocal();
- loadProducts();
- loadCustomers();
+navigator.geolocation.getCurrentPosition(p=>{
+LAT=p.coords.latitude;
+LNG=p.coords.longitude;
+});
 }
 
-function loadLocal(){
- GET("getLocalities","&area="+USER.area).then(l=>{
-  loc.innerHTML=sloc.innerHTML="";
-  l.forEach(x=>{
-   loc.innerHTML+=`<option>${x}</option>`;
-   sloc.innerHTML+=`<option>${x}</option>`;
-  });
- });
+function show(id){
+cust.classList.add("hidden");
+sale.classList.add("hidden");
+$(id).classList.remove("hidden");
+}
+
+function loadLocalities(){
+fetch(API+"?action=getlocalities&area="+USER.area)
+.then(r=>r.json())
+.then(l=>{
+loc.innerHTML=sloc.innerHTML="";
+l.forEach(x=>{
+loc.innerHTML+=`<option>${x}</option>`;
+sloc.innerHTML+=`<option>${x}</option>`;
+});
+});
 }
 
 function loadProducts(){
- GET("getProducts").then(p=>{
- PRODUCTS=p;
- sku.querySelector("tbody").innerHTML="";
- p.forEach(x=>{
- sku.querySelector("tbody").innerHTML+=`
-<tr>
+fetch(API+"?action=getproducts")
+.then(r=>r.json())
+.then(p=>{
+PRODUCTS=p;
+let tb=sku.querySelector("tbody");
+tb.innerHTML="";
+p.forEach(x=>{
+tb.innerHTML+=`<tr>
 <td>${x.sku}</td>
-<td><input type="number" value="" oninput="calc()"></td>
+<td><input type="number"></td>
 <td class="kg">0</td>
 <td class="val">0</td>
 </tr>`;
- });
- });
+});
+});
 }
 
 function loadCustomers(){
- GET("getCustomers","&user="+USER.name).then(c=>CUSTOMERS=c);
-}
-
-sloc.onchange=()=>{
- ssub.innerHTML="";
- [...new Set(CUSTOMERS.filter(x=>x.locality===sloc.value).map(x=>x.sub))]
- .forEach(x=>ssub.innerHTML+=`<option>${x}</option>`);
-};
-
-ssub.onchange=()=>{
- scust.innerHTML="";
- CUSTOMERS.filter(x=>x.sub===ssub.value)
- .forEach(x=>scust.innerHTML+=`<option>${x.name}</option>`);
-};
-
-function toggleType(){
- sku.classList.add("hidden");
- summary.classList.add("hidden");
- reason.classList.add("hidden");
-
- if(orderType.value==="PRODUCTIVE"){
-  sku.classList.remove("hidden");
-  summary.classList.remove("hidden");
- }
- else if(orderType.value==="NON PRODUCTIVE"){
-  reason.classList.remove("hidden");
- }
-}
-
-function calc(){
- let kg=0,val=0;
- [...sku.rows].slice(1).forEach((r,i)=>{
-  let q=r.cells[1].children[0].value||0;
-  let w=q*PRODUCTS[i].weight;
-  let v=q*PRODUCTS[i].price;
-  r.cells[2].innerText=w.toFixed(2);
-  r.cells[3].innerText=v;
-  kg+=+w; val+=+v;
- });
- tkg.innerText=kg.toFixed(2);
- tval.innerText=val;
+fetch(API+"?action=getcustomers&user="+USER.name)
+.then(r=>r.json())
+.then(c=>CUSTOMERS=c);
 }
 
 function saveCustomer(){
- const d={user:USER.name,area:USER.area,locality:loc.value,sub:sub.value,
- customer:cname.value,owner:owner.value,contact:contact.value,lat:LAT,lng:LNG};
 
- navigator.onLine?POST("saveCustomer",d):
- localStorage.setItem("cust",JSON.stringify([...(JSON.parse(localStorage.cust||"[]")),d]));
+const data={
+user:USER.name,
+area:USER.area,
+locality:loc.value,
+sub:submanual.value||sub.value,
+customer:cname.value,
+owner:owner.value,
+contact:contact.value,
+lat:LAT,lng:LNG
+};
 
- alert("DONE");
+fetch(API,{method:"POST",body:JSON.stringify({action:"saveCustomer",data})})
+
+cname.value="";
+owner.value="";
+contact.value="";
+submanual.value="";
+
+alert("SAVED");
 }
 
-function saveOrder(){
- let items=[];
- [...sku.rows].slice(1).forEach((r,i)=>{
- let q=r.cells[1].children[0].value;
- if(q>0)items.push({sku:PRODUCTS[i].sku,qty:q,kg:r.cells[2].innerText,value:r.cells[3].innerText});
- });
+function saveSale(){
 
- const d={
- user:USER.name,area:USER.area,
- locality:sloc.value,sub:ssub.value,
- customer:scust.value,
- recovery:recovery.value,
- orderType:orderType.value,
- nonProdReason:reason.value,
- items,lat:LAT,lng:LNG
- };
-
- navigator.onLine?POST("saveSales",d):
- localStorage.setItem("sales",JSON.stringify([...(JSON.parse(localStorage.sales||"[]")),d]));
-
- alert("ORDER SAVED");
+let items=[];
+document.querySelectorAll("#sku tbody tr").forEach((r,i)=>{
+let q=+r.children[1].children[0].value||0;
+if(q>0){
+items.push({
+sku:PRODUCTS[i].sku,
+qty:q,
+kg:q*PRODUCTS[i].weight,
+value:q*PRODUCTS[i].price
+});
 }
-
-window.addEventListener("online",()=>{
- ["cust","sales"].forEach(k=>{
-  (JSON.parse(localStorage[k]||"[]")).forEach(d=>
-   POST(k==="cust"?"saveCustomer":"saveSales",d));
-  localStorage.removeItem(k);
- });
 });
 
-if("serviceWorker" in navigator)
- navigator.serviceWorker.register("sw.js");
+fetch(API,{method:"POST",
+body:JSON.stringify({action:"saveSales",
+data:{
+user:USER.name,
+area:USER.area,
+locality:sloc.value,
+sub:ssub.value,
+customer:scust.value,
+items,
+recovery:recovery.value,
+lat:LAT,lng:LNG
+}})
+});
 
-function show(id){
- cust.classList.add("hidden");
- sale.classList.add("hidden");
- document.getElementById(id).classList.remove("hidden");
+alert("ORDER SAVED");
 }
+
 </script>
 </body>
 </html>
