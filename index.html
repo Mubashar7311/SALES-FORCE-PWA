@@ -6,9 +6,8 @@
 <meta name="theme-color" content="#1a73e8">
 
 <style>
-*{box-sizing:border-box;text-transform:uppercase;}
 body{font-family:Arial;background:#f2f2f2;margin:0}
-.box{max-width:720px;margin:auto;background:#fff;padding:15px}
+.box{max-width:700px;margin:auto;background:#fff;padding:15px}
 button{padding:12px;width:100%;margin-top:8px;border:none;border-radius:8px;font-weight:bold}
 .blue{background:#1a73e8;color:#fff}
 .green{background:#188038;color:#fff}
@@ -25,10 +24,8 @@ td,th{border:1px solid #ccc;padding:6px;text-align:center}
 <div class="box">
 
 <h3>LOGIN</h3>
-
 <select id="user"></select>
 <input id="pin" type="password" placeholder="PIN">
-
 <button class="blue" onclick="login()">LOGIN</button>
 
 <div id="menu" class="hidden">
@@ -38,38 +35,32 @@ td,th{border:1px solid #ccc;padding:6px;text-align:center}
 
 <div id="cust" class="hidden">
 <h3>ADD CUSTOMER</h3>
+<input id="cname" placeholder="Customer">
+<input id="owner" placeholder="Owner">
+<input id="contact" placeholder="Contact">
+<input id="sub" placeholder="Sub locality">
 
-<input id="cname" placeholder="CUSTOMER NAME">
-<input id="owner" placeholder="OWNER NAME">
-<input id="contact" placeholder="CONTACT">
-
-<select id="loc"></select>
-
-<select id="sub"></select>
-<input id="submanual" placeholder="TYPE SUB LOCALITY">
-
-<button class="red" onclick="saveCustomer()">SAVE CUSTOMER</button>
+<button class="red" onclick="saveCustomer()">SAVE</button>
 </div>
 
 <div id="sale" class="hidden">
 <h3>SALES ORDER</h3>
 
-<select id="sloc"></select>
-<select id="ssub"></select>
-<select id="scust"></select>
-
-<input id="recovery" placeholder="RECOVERY">
+<input id="customer" placeholder="Customer">
+<input id="recovery" placeholder="Recovery">
 
 <table id="sku">
 <thead>
-<tr><th>SKU</th><th>QTY</th><th>KG</th><th>VALUE</th></tr>
+<tr><th>SKU</th><th>QTY</th></tr>
 </thead>
-<tbody></tbody>
+<tbody>
+<tr><td>Sample Item</td><td><input></td></tr>
+</tbody>
 </table>
 
-<button class="green" onclick="saveSale()">SAVE ORDER</button>
-
+<button class="green" onclick="saveOrder()">SAVE ORDER</button>
 </div>
+
 </div>
 
 <script>
@@ -77,8 +68,6 @@ td,th{border:1px solid #ccc;padding:6px;text-align:center}
 const API="https://script.google.com/macros/s/AKfycbzGLPzSlya9JWf8LJFuXVrTTw5TrIJbfkOa_1DsrnjXlQOWCotu2FST85CZx9IUxy0PjQ/exec";
 
 const $=i=>document.getElementById(i);
-
-let USER={},PRODUCTS=[],CUSTOMERS=[],LAT=0,LNG=0;
 
 fetch(API+"?action=getusers")
 .then(r=>r.json())
@@ -89,18 +78,8 @@ d.forEach(x=>user.innerHTML+=`<option data-pin="${x.pin}" data-area="${x.area}">
 
 function login(){
 const o=user.selectedOptions[0];
-if(pin.value!==o.dataset.pin){alert("WRONG PIN");return;}
-USER={name:o.textContent,area:o.dataset.area};
+if(pin.value!==o.dataset.pin){alert("Wrong pin");return;}
 menu.classList.remove("hidden");
-
-loadLocalities();
-loadProducts();
-loadCustomers();
-
-navigator.geolocation.getCurrentPosition(p=>{
-LAT=p.coords.latitude;
-LNG=p.coords.longitude;
-});
 }
 
 function show(id){
@@ -109,95 +88,12 @@ sale.classList.add("hidden");
 $(id).classList.remove("hidden");
 }
 
-function loadLocalities(){
-fetch(API+"?action=getlocalities&area="+USER.area)
-.then(r=>r.json())
-.then(l=>{
-loc.innerHTML=sloc.innerHTML="";
-l.forEach(x=>{
-loc.innerHTML+=`<option>${x}</option>`;
-sloc.innerHTML+=`<option>${x}</option>`;
-});
-});
-}
-
-function loadProducts(){
-fetch(API+"?action=getproducts")
-.then(r=>r.json())
-.then(p=>{
-PRODUCTS=p;
-let tb=sku.querySelector("tbody");
-tb.innerHTML="";
-p.forEach(x=>{
-tb.innerHTML+=`<tr>
-<td>${x.sku}</td>
-<td><input type="number"></td>
-<td class="kg">0</td>
-<td class="val">0</td>
-</tr>`;
-});
-});
-}
-
-function loadCustomers(){
-fetch(API+"?action=getcustomers&user="+USER.name)
-.then(r=>r.json())
-.then(c=>CUSTOMERS=c);
-}
-
 function saveCustomer(){
-
-const data={
-user:USER.name,
-area:USER.area,
-locality:loc.value,
-sub:submanual.value||sub.value,
-customer:cname.value,
-owner:owner.value,
-contact:contact.value,
-lat:LAT,lng:LNG
-};
-
-fetch(API,{method:"POST",body:JSON.stringify({action:"saveCustomer",data})})
-
-cname.value="";
-owner.value="";
-contact.value="";
-submanual.value="";
-
-alert("SAVED");
+alert("Customer saved (demo)");
 }
 
-function saveSale(){
-
-let items=[];
-document.querySelectorAll("#sku tbody tr").forEach((r,i)=>{
-let q=+r.children[1].children[0].value||0;
-if(q>0){
-items.push({
-sku:PRODUCTS[i].sku,
-qty:q,
-kg:q*PRODUCTS[i].weight,
-value:q*PRODUCTS[i].price
-});
-}
-});
-
-fetch(API,{method:"POST",
-body:JSON.stringify({action:"saveSales",
-data:{
-user:USER.name,
-area:USER.area,
-locality:sloc.value,
-sub:ssub.value,
-customer:scust.value,
-items,
-recovery:recovery.value,
-lat:LAT,lng:LNG
-}})
-});
-
-alert("ORDER SAVED");
+function saveOrder(){
+alert("Order saved (demo)");
 }
 
 </script>
