@@ -1,118 +1,281 @@
-
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1a73e8">
+
 <title>FIELD SALES PWA</title>
+
 <style>
-body{font-family:Arial;background:#f2f2f2;margin:0;padding:15px}
-.box{max-width:700px;margin:auto;background:#fff;padding:15px;border-radius:10px}
-button{padding:12px;width:100%;margin-top:8px;border:none;border-radius:8px;font-weight:bold}
-.blue{background:#1a73e8;color:#fff}
-.green{background:#188038;color:#fff}
-.red{background:#d93025;color:#fff}
-.hidden{display:none}
-input,select{width:100%;padding:10px;margin-top:8px;border-radius:8px;border:1px solid #ccc}
-table{width:100%;border-collapse:collapse;margin-top:10px}
-td,th{border:1px solid #ccc;padding:6px;text-align:center}
+body{
+font-family:Arial;
+margin:0;
+background:#f2f2f2;
+}
+
+.card{
+max-width:700px;
+margin:auto;
+background:white;
+padding:15px;
+}
+
+input,select,button{
+width:100%;
+padding:12px;
+margin-top:8px;
+font-size:16px;
+}
+
+button{
+background:#1976d2;
+color:white;
+border:none;
+}
+
+.hidden{display:none;}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:10px;
+}
+
+td,th{
+border:1px solid #ccc;
+padding:6px;
+text-align:center;
+}
 </style>
+
 </head>
 
 <body>
-<div class="box">
+
+<div class="card">
+
 <h3>LOGIN</h3>
+
 <select id="user"></select>
 <input id="pin" type="password" placeholder="PIN">
-<button class="blue" onclick="login()">LOGIN</button>
+<button onclick="login()">LOGIN</button>
 
 <div id="menu" class="hidden">
-<button onclick="show('cust')">ADD CUSTOMER</button>
+<button onclick="show('add')">ADD CUSTOMER</button>
 <button onclick="show('sale')">SALES ORDER</button>
 </div>
 
-<div id="cust" class="hidden">
+<!-- ADD CUSTOMER -->
+<div id="add" class="hidden">
+
 <h3>ADD CUSTOMER</h3>
-<input id="cname" placeholder="CUSTOMER">
-<input id="owner" placeholder="OWNER">
-<input id="contact" placeholder="CONTACT">
-<input id="sub" placeholder="SUBLOCALITY">
-<button class="red" onclick="saveCustomer()">SAVE</button>
+
+<input id="cname" placeholder="Customer">
+<input id="owner" placeholder="Owner">
+<input id="contact" placeholder="Contact">
+
+<select id="loc"></select>
+<select id="sub"></select>
+
+<input id="manualSub" placeholder="Or Type SubLocality">
+
+<button onclick="saveCustomer()">SAVE</button>
+
 </div>
 
+
+<!-- SALES ORDER -->
 <div id="sale" class="hidden">
+
 <h3>SALES ORDER</h3>
-<input id="customer" placeholder="CUSTOMER">
-<input id="recovery" placeholder="RECOVERY">
-<table id="sku"><tbody></tbody></table>
-<button class="green" onclick="saveOrder()">SAVE ORDER</button>
+
+<select id="sloc"></select>
+<select id="ssub"></select>
+<select id="scust"></select>
+
+<input id="recovery" placeholder="Recovery">
+
+<table id="sku">
+<thead>
+<tr>
+<th>SKU</th>
+<th>QTY</th>
+<th>KG</th>
+<th>VALUE</th>
+</tr>
+</thead>
+
+<tbody></tbody>
+
+</table>
+
+<button onclick="saveOrder()">SAVE ORDER</button>
+
 </div>
+
 </div>
 
 <script>
-const API="https://script.google.com/macros/s/AKfycbzGLPzSlya9JWf8LJFuXVrTTw5TrIJbfkOa_1DsrnjXlQOWCotu2FST85CZx9IUxy0PjQ/exec";
-const $=i=>document.getElementById(i);
-let USER={};
 
-// load users
-fetch(API+"?action=getusers")
-.then(r=>r.json())
-.then(d=>{user.innerHTML="";
-d.forEach(x=>user.innerHTML+=`<option data-pin="${x.pin}" data-area="${x.area}">${x.name}</option>`);});
+const URL="https://script.google.com/macros/s/AKfycbzGLPzSlya9JWf8LJFuXVrTTw5TrIJbfkOa_1DsrnjXlQOWCotu2FST85CZx9IUxy0PjQ/exec";
 
-function login(){
-let o=user.selectedOptions[0];
-if(pin.value!==o.dataset.pin){alert("WRONG PIN");return;}
-USER.name=o.textContent;
-menu.classList.remove("hidden");
-loadProducts();
+let USER="";
+let AREA="";
+let PRODUCTS=[];
+let CUSTOMERS=[];
+
+function api(action,data={}){
+return fetch(URL,{
+method:"POST",
+body:JSON.stringify({action,data})
+}).then(r=>r.json());
 }
 
-function show(id){cust.classList.add("hidden");sale.classList.add("hidden");$(id).classList.remove("hidden");}
+/* LOAD USERS */
+fetch(URL+"?action=getusers")
+.then(r=>r.json())
+.then(u=>{
+user.innerHTML="";
+u.forEach(x=>{
+user.innerHTML+=`<option data-pin="${x.pin}" data-area="${x.area}">
+${x.name}
+</option>`
+});
+});
+
+function login(){
+let opt=user.selectedOptions[0];
+if(pin.value!=opt.dataset.pin){
+alert("Wrong PIN");
+return;
+}
+USER=opt.textContent;
+AREA=opt.dataset.area;
+menu.classList.remove("hidden");
+
+loadLocal();
+loadProducts();
+loadCustomers();
+}
+
+function show(x){
+add.classList.add("hidden");
+sale.classList.add("hidden");
+document.getElementById(x).classList.remove("hidden");
+}
+
+function loadLocal(){
+fetch(URL+"?action=getlocalities&area="+AREA)
+.then(r=>r.json())
+.then(l=>{
+loc.innerHTML="";
+sloc.innerHTML="";
+l.forEach(x=>{
+loc.innerHTML+=`<option>${x}</option>`;
+sloc.innerHTML+=`<option>${x}</option>`;
+});
+});
+}
+
+function loadCustomers(){
+fetch(URL+"?action=getcustomers&user="+USER)
+.then(r=>r.json())
+.then(c=>CUSTOMERS=c);
+}
+
+sloc.onchange=()=>{
+ssub.innerHTML="";
+let list=[...new Set(CUSTOMERS.filter(x=>x.locality==sloc.value).map(x=>x.sub))];
+list.forEach(x=>ssub.innerHTML+=`<option>${x}</option>`);
+}
+
+ssub.onchange=()=>{
+scust.innerHTML="";
+CUSTOMERS.filter(x=>x.sub==ssub.value)
+.forEach(x=>scust.innerHTML+=`<option>${x.name}</option>`);
+}
 
 function loadProducts(){
-fetch(API+"?action=getproducts")
+fetch(URL+"?action=getproducts")
 .then(r=>r.json())
 .then(p=>{
-let tb=sku.querySelector("tbody");tb.innerHTML="";
-p.forEach(x=>tb.innerHTML+=`<tr><td>${x.sku}</td><td><input type='number'></td></tr>`);
+PRODUCTS=p;
+let tb=document.querySelector("#sku tbody");
+tb.innerHTML="";
+p.forEach(x=>{
+tb.innerHTML+=`
+<tr>
+<td>${x.sku}</td>
+<td><input type="number"></td>
+<td>0</td>
+<td>0</td>
+</tr>`;
+});
 });
 }
 
 function saveCustomer(){
-let data={user:USER.name,customer:cname.value,owner:owner.value,contact:contact.value,sub:sub.value};
-if(navigator.onLine){
-fetch(API,{method:"POST",body:JSON.stringify({action:"saveCustomer",data})});
-}else{
-let a=JSON.parse(localStorage.getItem("CUSTQ")||"[]");
-a.push(data);localStorage.setItem("CUSTQ",JSON.stringify(a));
-}
-cname.value=owner.value=contact.value=sub.value="";
-alert("SAVED");
+
+let s=manualSub.value || sub.value;
+
+let data={
+user:USER,
+area:AREA,
+locality:loc.value,
+sub:s,
+customer:cname.value,
+owner:owner.value,
+contact:contact.value
+};
+
+api("saveCustomer",data).then(()=>{
+alert("Saved");
+cname.value="";
+owner.value="";
+contact.value="";
+manualSub.value="";
+});
+
 }
 
 function saveOrder(){
-let data={user:USER.name,customer:customer.value,recovery:recovery.value};
-if(navigator.onLine){
-fetch(API,{method:"POST",body:JSON.stringify({action:"saveSales",data})});
-}else{
-let a=JSON.parse(localStorage.getItem("ORDQ")||"[]");
-a.push(data);localStorage.setItem("ORDQ",JSON.stringify(a));
-}
-customer.value=recovery.value="";
-alert("ORDER SAVED");
-}
 
-// auto sync
-window.addEventListener("online",()=>{
-(JSON.parse(localStorage.getItem("CUSTQ")||"[]")).forEach(d=>fetch(API,{method:"POST",body:JSON.stringify({action:"saveCustomer",data:d})}));
-(JSON.parse(localStorage.getItem("ORDQ")||"[]")).forEach(d=>fetch(API,{method:"POST",body:JSON.stringify({action:"saveSales",data:d})}));
-localStorage.removeItem("CUSTQ");
-localStorage.removeItem("ORDQ");
+let items=[];
+
+document.querySelectorAll("#sku tbody tr")
+.forEach((r,i)=>{
+let q=r.children[1].children[0].value;
+if(q>0){
+items.push({
+sku:PRODUCTS[i].sku,
+qty:q,
+kg:q*PRODUCTS[i].weight,
+value:q*PRODUCTS[i].price
+});
+}
 });
 
-if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js");}
+let data={
+user:USER,
+area:AREA,
+locality:sloc.value,
+sub:ssub.value,
+customer:scust.value,
+recovery:recovery.value,
+orderType:"PRODUCTIVE",
+items
+};
+
+api("saveSales",data).then(()=>{
+alert("ORDER SAVED");
+});
+
+}
+
 </script>
+
 </body>
 </html>
