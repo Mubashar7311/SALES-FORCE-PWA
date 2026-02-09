@@ -1,278 +1,213 @@
 <!DOCTYPE html>
 <html>
 <head>
-
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<link rel="manifest" href="manifest.json">
-
-<title>FIELD SALES PWA</title>
-
-<style>
-body{
-font-family:Arial;
-margin:0;
-background:#f2f2f2;
-}
-
-.card{
-max-width:700px;
-margin:auto;
-background:white;
-padding:15px;
-}
-
-input,select,button{
-width:100%;
-padding:12px;
-margin-top:8px;
-font-size:16px;
-}
-
-button{
-background:#1976d2;
-color:white;
-border:none;
-}
-
-.hidden{display:none;}
-
-table{
-width:100%;
-border-collapse:collapse;
-margin-top:10px;
-}
-
-td,th{
-border:1px solid #ccc;
-padding:6px;
-text-align:center;
-}
-</style>
-
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body{font-family:Arial,sans-serif; font-size:18px; padding:10px; background:#f8f9fa;}
+    select,input,button{font-size:18px; padding:10px; margin:5px 0; width:100%; border-radius:6px; border:1px solid #ccc;}
+    button{background:#007bff; color:white; border:none;}
+    button:hover{background:#0056b3; cursor:pointer;}
+    table{border-collapse:collapse;width:100%; display:block; overflow-x:auto; margin-top:10px; background:white; border-radius:6px;}
+    th,td{border:1px solid #ddd; padding:8px; text-align:center; min-width:100px;}
+    th{background:#343a40; color:white;}
+    tr:nth-child(even){background:#f2f2f2;}
+    th.sticky, td.sticky{position:sticky; left:0; background:#343a40; color:white; z-index:2;}
+    th.sticky2, td.sticky2{position:sticky; left:120px; background:#343a40; color:white; z-index:2;}
+    #msg{margin-top:10px; font-weight:bold; font-size:18px;}
+    .ok{color:green;}
+    .err{color:red;}
+  </style>
 </head>
-
 <body>
 
-<div class="card">
+<h3>Inventory / Sales Entry</h3>
 
-<h3>LOGIN</h3>
+<select id="mode">
+  <option value="">Select Type</option>
+  <option value="SALES">SALES</option>
+  <option value="CLOSING">CLOSING</option>
+</select>
 
-<select id="user"></select>
-<input id="pin" type="password" placeholder="PIN">
-<button onclick="login()">LOGIN</button>
+<select id="section">
+  <option value="">Select Section</option>
+</select>
 
-<div id="menu" class="hidden">
-<button onclick="show('add')">ADD CUSTOMER</button>
-<button onclick="show('sale')">SALES ORDER</button>
-</div>
+<select id="rep">
+  <option value="">Select Rep</option>
+</select>
 
-<!-- ADD CUSTOMER -->
-<div id="add" class="hidden">
+<button onclick="loadSKU()">LOAD TABLE</button>
 
-<h3>ADD CUSTOMER</h3>
-
-<input id="cname" placeholder="Customer">
-<input id="owner" placeholder="Owner">
-<input id="contact" placeholder="Contact">
-
-<select id="loc"></select>
-<select id="sub"></select>
-
-<input id="manualSub" placeholder="Or Type SubLocality">
-
-<button onclick="saveCustomer()">SAVE</button>
-
-</div>
-
-
-<!-- SALES ORDER -->
-<div id="sale" class="hidden">
-
-<h3>SALES ORDER</h3>
-
-<select id="sloc"></select>
-<select id="ssub"></select>
-<select id="scust"></select>
-
-<input id="recovery" placeholder="Recovery">
-
-<table id="sku">
+<table id="tbl">
 <thead>
 <tr>
-<th>SKU</th>
-<th>QTY</th>
-<th>KG</th>
-<th>VALUE</th>
+  <th class="sticky">SKU</th>
+  <th class="sticky2">Opening</th>
+  <th id="inHead">Input</th>
+  <th>Closing</th>
 </tr>
 </thead>
-
 <tbody></tbody>
-
 </table>
 
-<button onclick="saveOrder()">SAVE ORDER</button>
+<button id="submitBtn" onclick="save()">SUBMIT</button>
 
-</div>
-
-</div>
+<span id="msg"></span>
 
 <script>
+let cache=[];
+let invoiceNo="";
 
-const URL="https://script.google.com/macros/s/AKfycbzGLPzSlya9JWf8LJFuXVrTTw5TrIJbfkOa_1DsrnjXlQOWCotu2FST85CZx9IUxy0PjQ/exec";
+// Load Sections
+google.script.run.withSuccessHandler(d=>{
+  d.forEach(s=>{
+    let o=document.createElement("option");
+    o.value=o.text=s;
+    section.appendChild(o);
+  });
+}).getSections();
 
-let USER="";
-let AREA="";
-let PRODUCTS=[];
-let CUSTOMERS=[];
-
-function api(action,data={}){
-return fetch(URL,{
-method:"POST",
-body:JSON.stringify({action,data})
-}).then(r=>r.json());
-}
-
-/* LOAD USERS */
-fetch(URL+"?action=getusers")
-.then(r=>r.json())
-.then(u=>{
-user.innerHTML="";
-u.forEach(x=>{
-user.innerHTML+=`<option data-pin="${x.pin}" data-area="${x.area}">
-${x.name}
-</option>`
-});
-});
-
-function login(){
-let opt=user.selectedOptions[0];
-if(pin.value!=opt.dataset.pin){
-alert("Wrong PIN");
-return;
-}
-USER=opt.textContent;
-AREA=opt.dataset.area;
-menu.classList.remove("hidden");
-
-loadLocal();
-loadProducts();
-loadCustomers();
-}
-
-function show(x){
-add.classList.add("hidden");
-sale.classList.add("hidden");
-document.getElementById(x).classList.remove("hidden");
-}
-
-function loadLocal(){
-fetch(URL+"?action=getlocalities&area="+AREA)
-.then(r=>r.json())
-.then(l=>{
-loc.innerHTML="";
-sloc.innerHTML="";
-l.forEach(x=>{
-loc.innerHTML+=`<option>${x}</option>`;
-sloc.innerHTML+=`<option>${x}</option>`;
-});
-});
-}
-
-function loadCustomers(){
-fetch(URL+"?action=getcustomers&user="+USER)
-.then(r=>r.json())
-.then(c=>CUSTOMERS=c);
-}
-
-sloc.onchange=()=>{
-ssub.innerHTML="";
-let list=[...new Set(CUSTOMERS.filter(x=>x.locality==sloc.value).map(x=>x.sub))];
-list.forEach(x=>ssub.innerHTML+=`<option>${x}</option>`);
-}
-
-ssub.onchange=()=>{
-scust.innerHTML="";
-CUSTOMERS.filter(x=>x.sub==ssub.value)
-.forEach(x=>scust.innerHTML+=`<option>${x.name}</option>`);
-}
-
-function loadProducts(){
-fetch(URL+"?action=getproducts")
-.then(r=>r.json())
-.then(p=>{
-PRODUCTS=p;
-let tb=document.querySelector("#sku tbody");
-tb.innerHTML="";
-p.forEach(x=>{
-tb.innerHTML+=`
-<tr>
-<td>${x.sku}</td>
-<td><input type="number"></td>
-<td>0</td>
-<td>0</td>
-</tr>`;
-});
-});
-}
-
-function saveCustomer(){
-
-let s=manualSub.value || sub.value;
-
-let data={
-user:USER,
-area:AREA,
-locality:loc.value,
-sub:s,
-customer:cname.value,
-owner:owner.value,
-contact:contact.value
+// Load Reps dependent on Section
+section.onchange = function(){
+  rep.innerHTML = '<option value="">Select Rep</option>';
+  if(!section.value) return;
+  if(mode.value!=="PURCHASE"){
+    google.script.run.withSuccessHandler(list=>{
+      list.forEach(r=>{
+        let o=document.createElement("option");
+        o.value=o.text=r;
+        rep.appendChild(o);
+      });
+    }).getRepsBySection(section.value);
+  }
 };
 
-api("saveCustomer",data).then(()=>{
-alert("Saved");
-cname.value="";
-owner.value="";
-contact.value="";
-manualSub.value="";
-});
+// Load SKU Table
+function loadSKU(){
 
+  msg.innerHTML="";
+
+  if(!section.value || !mode.value || !rep.value){
+    msg.innerHTML="❌ Select Type, Section & Rep";
+    msg.className="err";
+    return;
+  }
+
+  // 🔎 CHECK PENDING RECEIVED
+  google.script.run.withSuccessHandler(pending=>{
+
+    if(pending.length > 0){
+
+      let text = "⚠ RECEIVED PENDING\n\n";
+      pending.forEach(p => text += "• " + p + "\n");
+
+      alert(text);   // Show warning popup
+    }
+
+    // 🟢 Continue loading table
+    loadTableActual();
+
+  }).checkReceivedPending(section.value);
 }
 
-function saveOrder(){
-
-let items=[];
-
-document.querySelectorAll("#sku tbody tr")
-.forEach((r,i)=>{
-let q=r.children[1].children[0].value;
-if(q>0){
-items.push({
-sku:PRODUCTS[i].sku,
-qty:q,
-kg:q*PRODUCTS[i].weight,
-value:q*PRODUCTS[i].price
-});
+// Calculation
+function calc(i,el){
+  let o=cache[i].opening;
+  let v=Number(el.value)||0;
+  let s,c;
+  if(mode.value==="SALES"){ s=v; c=o-s; if(c<0){el.value=0;c=o;} }
+  else if(mode.value==="CLOSING"){ c=v; if(c<0){el.value=o;c=o;} s=o-c; }
+  else if(mode.value==="PURCHASE"){ s=v; c=o+s; }
+  document.getElementById("c"+i).innerText=c;
 }
-});
 
-let data={
-user:USER,
-area:AREA,
-locality:sloc.value,
-sub:ssub.value,
-customer:scust.value,
-recovery:recovery.value,
-orderType:"PRODUCTIVE",
-items
-};
+// Save
+function save(){
 
-api("saveSales",data).then(()=>{
-alert("ORDER SAVED");
-});
+  const btn = document.getElementById("submitBtn");
 
+  // Prevent double click
+  if(btn.disabled) return;
+
+  btn.disabled = true;
+  btn.innerText = "Saving...";
+  msg.innerHTML="⏳ Submitting...";
+  msg.className="";
+
+  let arr=[];
+
+  [...tbl.querySelectorAll("tbody tr")].forEach((tr,i)=>{
+    let v=Number(tr.cells[2].querySelector("input").value)||0;
+
+    if(v!==0){
+      let o=Number(cache[i].opening)||0;
+      let s,c;
+
+      if(mode.value==="SALES"){ 
+        s=v; 
+        c=o-s; 
+      }
+      else if(mode.value==="CLOSING"){ 
+        c=v; 
+        s=o-c; 
+      }
+
+      arr.push({
+        section: section.value,
+        rep: rep.value,
+        sku: cache[i].sku,
+        opening: o,
+        sales: s,
+        closing: c
+      });
+    }
+  });
+
+  if(arr.length===0){
+    msg.innerHTML="❌ No data entered";
+    msg.className="err";
+    btn.disabled=false;
+    btn.innerText="SUBMIT";
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(()=>{
+      msg.innerHTML="✔ Data Saved";
+      msg.className="ok";
+      tbl.querySelector("tbody").innerHTML="";
+      section.value="";
+      rep.value="";
+      mode.value="";
+      btn.disabled=false;
+      btn.innerText="SUBMIT";
+    })
+    .withFailureHandler(e=>{
+      msg.innerHTML="❌ Error: "+e.message;
+      msg.className="err";
+      btn.disabled=false;
+      btn.innerText="SUBMIT";
+    })
+    .saveFromWeb(arr, mode.value);
+}
+function loadTableActual(){
+
+  tbl.querySelector("tbody").innerHTML="";
+  inHead.innerText = mode.value==="SALES" ? "Sales" : "Closing";
+
+  google.script.run.withSuccessHandler(d=>{
+    cache=d;
+    d.forEach((r,i)=>{
+      let tr=document.createElement("tr");
+      tr.innerHTML=`
+        <td class="sticky">${r.sku}</td>
+        <td class="sticky2">${r.opening}</td>
+        <td><input type="number" oninput="calc(${i},this)"></td>
+        <td id="c${i}">${r.closing}</td>`;
+      tbl.querySelector("tbody").appendChild(tr);
+    });
+  }).getSKUData(section.value);
 }
 
 </script>
